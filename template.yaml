@@ -1,0 +1,125 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: UK Financial Products Comparison Platform
+
+Globals:
+  Function:
+    Timeout: 30
+    MemorySize: 256
+    Runtime: nodejs20.x
+    Environment:
+      Variables:
+        CACHE_BUCKET_NAME: !Ref CacheBucket
+
+Parameters:
+  GeminiApiKey:
+    Type: String
+    NoEcho: true
+  ExchangeRatesApiKey:
+    Type: String
+    NoEcho: true
+
+Resources:
+  FinancialApiFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: backend/
+      Handler: src/index.handler
+      Environment:
+        Variables:
+          GEMINI_API_KEY: !Ref GeminiApiKey
+          EXCHANGE_RATES_API_KEY: !Ref ExchangeRatesApiKey
+      Policies:
+        - S3CrudPolicy:
+            BucketName: !Ref CacheBucket
+      Events:
+        ProductsApi:
+          Type: Api
+          Properties:
+            Path: /products/{category}
+            Method: GET
+        CompareApi:
+          Type: Api
+          Properties:
+            Path: /compare
+            Method: POST
+        RecommendationsApi:
+          Type: Api
+          Properties:
+            Path: /recommendations
+            Method: GET
+        OptionsProducts:
+          Type: Api
+          Properties:
+            Path: /products/{category}
+            Method: OPTIONS
+        OptionsCompare:
+          Type: Api
+          Properties:
+            Path: /compare
+            Method: OPTIONS
+        OptionsRecommendations:
+          Type: Api
+          Properties:
+            Path: /recommendations
+            Method: OPTIONS
+
+  CacheBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      LifecycleConfiguration:
+        Rules:
+          - Id: DeleteOldCache
+            Status: Enabled
+            ExpirationInDays: 7
+
+  FrontendBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      WebsiteConfiguration:
+        IndexDocument: index.html
+        ErrorDocument: index.html
+
+  FrontendBucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref FrontendBucket
+      PolicyDocument:
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: cloudfront.amazonaws.com
+            Action: s3:GetObject
+            Resource: !Sub '${FrontendBucket.Arn}/*'
+
+  CloudFrontDistribution:
+    Type: AWS::CloudFront::Distribution
+    Properties:
+      DistributionConfig:
+        DefaultRootObject: index.html
+        Origins:
+          - Id: S3Origin
+            DomainName: !GetAtt FrontendBucket.RegionalDomainName
+            S3OriginConfig:
+              OriginAccessIdentity: ''
+        DefaultCacheBehavior:
+          TargetOriginId: S3Origin
+          ViewerProtocolPolicy: redirect-to-https
+          ForwardedValues:
+            QueryString: false
+        CustomErrorResponses:
+          - ErrorCode: 404
+            ResponseCode: 200
+            ResponsePagePath: /index.html
+        Enabled: true
+
+Outputs:
+  ApiUrl:
+    Description: API Gateway endpoint URL
+    Value: !Sub 'https://${ServerlessRestApi}.execute-api.${AWS::Region}.amazonaws.com/Prod'
+  CloudFrontUrl:
+    Description: Frontend URL
+    Value: !GetAtt CloudFrontDistribution.DomainName
+  FrontendBucketName:
+    Description: S3 bucket for frontend
+    Value: !Ref FrontendBucket
