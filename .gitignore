@@ -1,0 +1,9 @@
+env.json
+.env
+.env.*
+node_modules/
+frontend/build/
+.aws-sam/
+samconfig.toml
+coverage/
+*.log
