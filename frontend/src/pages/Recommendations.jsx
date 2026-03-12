@@ -10,7 +10,6 @@ export default function Recommendations() {
   const [result, setResult] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
-  const [hasError, setHasError] = useState(false);
   const [useAI, setUseAI] = useState(true);
   const [annualIncome, setAnnualIncome] = useState('');
   const [bankAmount, setBankAmount] = useState('');
@@ -20,7 +19,8 @@ export default function Recommendations() {
     setLoading(true);
     setError(null);
     try {
-      const params = new URLSearchParams({ category, amount, situation, useAI: String(useAI) });
+      const params = new URLSearchParams({ category, amount, useAI: String(useAI) });
+      if (situation) params.set('situation', situation);
       if (annualIncome !== '') params.set('annualIncome', annualIncome);
       if (bankAmount !== '') params.set('bankAmount', bankAmount);
       const res = await fetch(`${API_BASE}/recommendations?${params}`);
@@ -29,7 +29,6 @@ export default function Recommendations() {
       setResult(data);
     } catch (err) {
       setError(err.message || 'Failed to get recommendation. Please try again.');
-      setHasError(true);
     } finally {
       setLoading(false);
     }
@@ -37,7 +36,7 @@ export default function Recommendations() {
 
   return (
     <div>
-      <h2 style={{ marginBottom: '1.5rem' }}>AI-Powered Recommendations</h2>
+      <h2 style={{ marginBottom: '1.5rem' }}>Financial Recommendations</h2>
       <div className="card">
         <form onSubmit={handleSubmit}>
           <label>Product Category</label>
@@ -46,6 +45,7 @@ export default function Recommendations() {
             <option value="exchange-rates">Exchange Rates</option>
             <option value="savings">Savings</option>
           </select>
+
           <label>Amount (£)</label>
           <input
             type="number"
@@ -54,25 +54,7 @@ export default function Recommendations() {
             onChange={e => setAmount(e.target.value)}
             required
           />
-          <label>Your Financial Situation</label>
-          <textarea
-            rows={4}
-            placeholder="Describe your situation: income, existing debts, credit score, savings, employment type, how long you plan to stay in the property, etc."
-            value={situation}
-            onChange={e => setSituation(e.target.value)}
-            required
-          />
-          <button className="btn" type="submit" disabled={loading || !amount || !situation}>
-            {loading ? 'Getting recommendation...' : 'Get AI Recommendation'}
-          </button>
-        </form>
-      </div>
 
-      {error && <div className="error">{error}</div>}
-
-      {hasError && (
-        <div className="card">
-          <h3 style={{ marginBottom: '1rem' }}>Provide More Detail</h3>
           <label>Annual Income After Taxes (£)</label>
           <input
             type="number"
@@ -81,6 +63,7 @@ export default function Recommendations() {
             value={annualIncome}
             onChange={e => setAnnualIncome(e.target.value)}
           />
+
           <label>Current Amount in the Bank (£)</label>
           <input
             type="number"
@@ -89,7 +72,21 @@ export default function Recommendations() {
             value={bankAmount}
             onChange={e => setBankAmount(e.target.value)}
           />
-          <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginTop: '0.5rem' }}>
+
+          {useAI && (
+            <>
+              <label>Your Financial Situation</label>
+              <textarea
+                rows={4}
+                placeholder="Describe your situation: income, existing debts, credit score, savings, employment type, how long you plan to stay in the property, etc."
+                value={situation}
+                onChange={e => setSituation(e.target.value)}
+                required
+              />
+            </>
+          )}
+
+          <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginTop: '0.75rem' }}>
             <input
               type="checkbox"
               checked={useAI}
@@ -97,13 +94,21 @@ export default function Recommendations() {
             />
             Use AI Recommendation
           </label>
-        </div>
-      )}
+
+          <button className="btn" type="submit" disabled={loading || !amount || (useAI && !situation)}>
+            {loading ? 'Getting recommendation...' : useAI ? 'Get AI Recommendation' : 'Get Recommendation'}
+          </button>
+        </form>
+      </div>
+
+      {error && <div className="error">{error}</div>}
 
       {result && (
         <>
           <div className="card">
-            <h3 style={{ marginBottom: '1rem' }}>AI Recommendation</h3>
+            <h3 style={{ marginBottom: '1rem' }}>
+              {result.aiUsed ? 'AI Recommendation' : 'Recommendation'}
+            </h3>
             <div className="ai-insight">{result.recommendation}</div>
             <p style={{ color: '#999', fontSize: '0.8rem', marginTop: '1rem' }}>
               Generated at: {new Date(result.generatedAt).toLocaleString()} · Based on live Bank of England data

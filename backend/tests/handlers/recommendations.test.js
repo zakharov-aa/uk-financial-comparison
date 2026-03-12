@@ -34,6 +34,7 @@ describe('handleRecommendations', () => {
     });
     expect(result.recommendation).toBe('Recommendation: Fix for 2 years');
     expect(result.currentRates).toBeDefined();
+    expect(result.aiUsed).toBe(true);
   });
 
   test('defaults to mortgages when no category provided', async () => {
@@ -67,6 +68,7 @@ describe('handleRecommendations', () => {
     expect(buildBasicRecommendation).toHaveBeenCalled();
     expect(getAIAnalysis).not.toHaveBeenCalled();
     expect(result.recommendation).toBe('Rule-based recommendation');
+    expect(result.aiUsed).toBe(false);
   });
 
   test('still uses AI for exchange-rates even when useAI is false', async () => {

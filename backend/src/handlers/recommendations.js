@@ -17,13 +17,15 @@ async function handleRecommendations({ category = 'mortgages', amount, situation
       currentRates: rateData,
       generatedAt: new Date().toISOString(),
       category,
+      aiUsed: true,
     };
   }
 
   const rateData = await fetchMortgageRates();
+  const aiRequested = useAI !== 'false';
 
   let recommendation;
-  if (useAI === 'false') {
+  if (!aiRequested) {
     recommendation = buildBasicRecommendation(rateData, parsedAmount, parsedIncome, parsedBank);
   } else {
     const prompt = buildMortgagePrompt(rateData, parsedAmount, situation, parsedIncome, parsedBank);
@@ -35,6 +37,7 @@ async function handleRecommendations({ category = 'mortgages', amount, situation
     currentRates: rateData.current,
     generatedAt: new Date().toISOString(),
     category,
+    aiUsed: aiRequested,
   };
 }
 
