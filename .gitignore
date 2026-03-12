@@ -9,3 +9,4 @@ coverage/
 *.log
 *-event.json
 *-event2.json
+.worktrees/
