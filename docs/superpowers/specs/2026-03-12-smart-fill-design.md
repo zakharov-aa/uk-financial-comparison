@@ -21,25 +21,29 @@ Frontend: GET /extract-fields?prompt=...
       │
       ▼
 extractFields handler
-  ├── buildExtractionPrompt(text)
-  ├── getAIAnalysis(prompt)         ← existing function
+  ├── validate prompt (non-empty)
+  ├── buildExtractionPrompt(text)      ← new, in gemini.js
+  ├── getAIAnalysis(extractionPrompt)  ← existing
   ├── JSON.parse(response)
-  ├── fetchExchangeRates() if amount not in GBP
+  ├── if amountCurrency !== 'GBP':
+  │     fetchExchangeRates()           ← from services/exchangeRates.js
+  │     convert amount to GBP
   └── return { category, amount, incomeEntries, situation }
       │
       ▼
 Frontend populates form fields
-  └── AI-filled fields show green left-border + "✦ AI" badge
-  └── User edits → badge removed from that field
+  └── AI-filled fields: green left-border + "✦ AI" badge next to label
+  └── User edits a field → badge + border removed from that field only
+  └── Page scrolls to first field whose value changed (excluding category)
 ```
 
 ---
 
 ## Backend
 
-### New: `buildExtractionPrompt(text)` in `gemini.js`
+### `buildExtractionPrompt(text)` — new function in `backend/src/services/gemini.js`
 
-Constructs a prompt instructing Gemini to return **only** a JSON object (no markdown, no explanation) with this shape:
+Constructs a prompt instructing Gemini to return **only** a JSON object — no markdown fences, no prose — with this exact shape:
 
 ```json
 {
@@ -52,19 +56,22 @@ Constructs a prompt instructing Gemini to return **only** a JSON object (no mark
 ```
 
 Rules embedded in the prompt:
-- Use explicit numbers from the text if present; otherwise estimate realistically for the described role/location
-- `category` must be `"mortgages"` or `"savings"`
-- `amountCurrency` is the natural currency for the described location (e.g. `"USD"` for US, `"GBP"` for UK)
-- `incomeEntries` is an array — one entry per income source mentioned
-- `situation` is a clean summary of the user's description for use in the AI recommendation later
-- Return **only** valid JSON — no prose, no markdown fences
+- `category` must be exactly `"mortgages"` or `"savings"` — infer from context, default to `"mortgages"`
+- `amount` is the loan or savings amount; use explicit number if stated, otherwise estimate realistically for the described location/property type
+- `amountCurrency` is the natural currency for the described location (e.g. `"USD"` for US, `"GBP"` for UK, `"EUR"` for Eurozone); default to `"GBP"` if unclear
+- `incomeEntries` is an array of `{ amount, currency }` — one per income source mentioned; estimate realistically for role/location if not stated; use the location's natural currency
+- `situation` is a clean one-sentence summary of the user's description for later use in the AI recommendation
+- Return **only** valid JSON — no markdown, no explanation
 
 ### New: `backend/src/handlers/extractFields.js`
 
-1. Call `buildExtractionPrompt(prompt)` → `getAIAnalysis(prompt)`
-2. `JSON.parse` the response — if parsing fails, throw a clean `extraction_failed` error
-3. If `amountCurrency` is not `"GBP"`: call `fetchExchangeRates()` and convert `amount` to GBP
-4. Return:
+1. Validate `prompt` param is non-empty — if missing or empty, throw `{ statusCode: 400, message: 'prompt is required' }`
+2. Call `getAIAnalysis(buildExtractionPrompt(prompt))` — i.e. pass the return value of `buildExtractionPrompt` as the argument to `getAIAnalysis`
+3. `JSON.parse` the response — if parsing fails, throw `{ statusCode: 422, message: 'extraction_failed' }`
+4. If `amountCurrency` is missing, default it to `'GBP'`
+5. If `amountCurrency !== 'GBP'`: import `fetchExchangeRates` from `../services/exchangeRates` and convert `amount` to GBP using `amount / rates[amountCurrency]`
+6. If `incomeEntries` is missing or not an array, default to `[]` — income entries are **left in their original currency** (the Recommendations handler already converts them server-side)
+7. Return:
 
 ```json
 {
@@ -75,73 +82,72 @@ Rules embedded in the prompt:
 }
 ```
 
-### Error handling in handler
+### Error handling
 
-| Error | Response |
-|-------|----------|
-| Gemini 429 | `{ "error": "quota_exceeded" }` with status 429 |
-| JSON parse failure | `{ "error": "extraction_failed" }` with status 422 |
-| Other Gemini error | `{ "error": "extraction_failed" }` with status 500 |
+All errors are **thrown** (not returned directly) so the existing centralised handler in `index.js` catches and formats them consistently:
+
+| Scenario | Throw |
+|----------|-------|
+| Missing/empty `prompt` | `{ statusCode: 400, message: 'prompt is required' }` |
+| Gemini 429 | Re-throw as-is — `index.js` catches `err.status === 429` and returns `"AI service quota exceeded"` |
+| JSON parse failure | `{ statusCode: 422, message: 'extraction_failed' }` |
+| Other Gemini/network error | Re-throw as-is — `index.js` returns 500 |
+
+The frontend treats any non-200 response as a smart fill failure and shows the appropriate message (see Frontend section).
 
 ### New route in `index.js`
 
+```javascript
+} else if (method === 'GET' && path === '/extract-fields') {
+  response = await handleExtractFields(event.queryStringParameters || {});
+}
 ```
-GET /extract-fields?prompt=<text>
-```
-
-### Tests (`backend/tests/handlers/extractFields.test.js`)
-
-- Valid prompt → returns correctly shaped object with all fields
-- Amount in USD → `fetchExchangeRates` called once, amount converted to GBP
-- Amount already in GBP → `fetchExchangeRates` NOT called
-- Gemini returns malformed JSON → returns `extraction_failed` error
-- Gemini throws 429 → returns `quota_exceeded` error
-- `buildExtractionPrompt` includes the user's text in the returned string
 
 ---
 
 ## Frontend
 
-### Smart Fill panel (top of `Recommendations.jsx`)
+### Smart Fill panel (`Recommendations.jsx`)
 
-A panel above the form with a textarea and "Fill Form" button. Always visible regardless of AI mode toggle.
+A panel above the form, always visible regardless of AI mode toggle. Contains a textarea and "Fill Form" button.
 
-**States:**
+**UI states:**
 
 | State | UI |
 |-------|----|
-| Idle | Textarea + "Fill Form" button |
-| Loading | Button shows spinner, button disabled |
-| Quota exceeded | Amber message: "AI quota exceeded — please fill in the fields manually" |
-| Other error | Amber message: "Smart fill unavailable — please fill in the fields manually" |
-| Success | Form fields populated, panel stays visible for re-use |
+| Idle | Textarea + enabled "Fill Form" button |
+| Loading | Button shows "Filling…" and is disabled |
+| Quota exceeded (HTTP 429) | Amber message: "AI quota exceeded — please fill in the fields manually" |
+| Other error (non-200) | Amber message: "Smart fill unavailable — please fill in the fields manually" |
+| Success | Form fields populated; panel stays visible for re-use |
 
 ### AI-filled field indicators
 
-When a field is populated by smart fill:
-- Green left-border on the input/select
-- Small `✦ AI` badge next to the field label
-
-When the user manually edits an AI-filled field:
-- Badge and green border are removed from that field only
-- Other AI-filled fields retain their indicators
-
-### Form scroll behaviour
-
-On successful fill, the page scrolls down to the first populated field so the user immediately sees the result.
-
-### State shape
-
+**State shape:**
 ```javascript
-// Track which fields were AI-filled
 const [aiFilledFields, setAiFilledFields] = useState(new Set());
+// Keys: 'category', 'amount', 'incomeEntries', 'situation'
+// incomeEntries is tracked as a single key for the whole array
+```
 
-// Clear AI indicator when user edits a field
-function handleFieldChange(fieldName, value) {
-  setAiFilledFields(prev => { const next = new Set(prev); next.delete(fieldName); return next; });
-  // ... update field value
+When a field is populated by smart fill: green left-border + `✦ AI` badge next to label.
+
+When user manually edits a field:
+```javascript
+function markUserEdited(fieldName) {
+  setAiFilledFields(prev => {
+    const next = new Set(prev);
+    next.delete(fieldName);
+    return next;
+  });
 }
 ```
+
+The `incomeEntries` indicator (border + badge on the section label) clears as soon as the user adds, removes, or edits any income row.
+
+### Scroll behaviour
+
+On successful fill, scroll to the `amount` input (first meaningfully-changed numeric field), not `category` (which defaults to mortgages and may not have changed).
 
 ---
 
@@ -149,12 +155,40 @@ function handleFieldChange(fieldName, value) {
 
 | File | Change |
 |------|--------|
-| `backend/src/services/gemini.js` | Add `buildExtractionPrompt` |
+| `backend/src/services/gemini.js` | Add `buildExtractionPrompt`; export it |
 | `backend/src/handlers/extractFields.js` | New handler |
 | `backend/src/index.js` | Add `GET /extract-fields` route |
-| `backend/tests/handlers/extractFields.test.js` | New test file |
-| `backend/tests/services/gemini.test.js` | Add `buildExtractionPrompt` tests |
+| `backend/tests/handlers/extractFields.test.js` | New test file (see below) |
+| `backend/tests/services/gemini.test.js` | Add `buildExtractionPrompt` tests + fix existing gaps (see below) |
 | `frontend/src/pages/Recommendations.jsx` | Add smart fill panel + AI field indicators |
+
+---
+
+## Tests
+
+### `backend/tests/handlers/extractFields.test.js` (new)
+
+- Valid prompt → returns `{ category, amount, incomeEntries, situation }` with correct shape
+- Amount in USD → `fetchExchangeRates` called once, `amount` converted to GBP correctly
+- Amount already in GBP → `fetchExchangeRates` NOT called
+- Missing `prompt` param → throws 400 `prompt is required`
+- Empty string `prompt` → throws 400 `prompt is required`
+- Gemini returns malformed JSON → throws 422 `extraction_failed`
+- Gemini throws 429 → error propagates (not swallowed)
+- `amountCurrency` absent from Gemini response → defaults to `'GBP'`, no FX call
+- `incomeEntries` absent from Gemini response → defaults to `[]`
+
+### `backend/tests/services/gemini.test.js` additions
+
+**New `buildExtractionPrompt` describe block:**
+- Includes the user's text in the returned prompt string
+- Contains the word `"JSON"` (instructs Gemini to return JSON only)
+- Contains `"mortgages"` and `"savings"` (documents the valid category values)
+- Contains `"amountCurrency"` (ensures the currency field is requested)
+
+**Fixes to existing `getAIAnalysis` describe block:**
+- Add `afterEach(() => { delete process.env.GEMINI_API_KEY; })` — current tests delete the key but don't restore it, which can cause ordering-dependent failures
+- Add test: `generateContent` throws an error → `getAIAnalysis` rejects with that error (currently not tested, leaving the error propagation path uncovered)
 
 ---
 
@@ -163,3 +197,4 @@ function handleFieldChange(fieldName, value) {
 - Bank amount is NOT filled by smart fill (too personal to estimate)
 - No caching of extraction results
 - No multi-turn conversation
+- No frontend unit tests (the smart fill panel is thin UI logic; covered by the backend tests + manual verification)
