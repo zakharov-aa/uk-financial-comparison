@@ -91,6 +91,8 @@ All errors are **thrown** (not returned directly) so the existing centralised ha
 | Missing/empty `prompt` | `{ statusCode: 400, message: 'prompt is required' }` |
 | Gemini 429 | Re-throw as-is — `index.js` catches `err.status === 429` and returns `"AI service quota exceeded"` |
 | JSON parse failure | `{ statusCode: 422, message: 'extraction_failed' }` |
+| `prompt` longer than 1000 characters | `{ statusCode: 400, message: 'prompt too long' }` |
+| `amount` is not a positive finite number (null, NaN, negative, string) | `{ statusCode: 422, message: 'extraction_failed' }` |
 | `amountCurrency` present but not in `fxData.rates` (e.g. `"AUD"`) | `{ statusCode: 422, message: 'extraction_failed' }` |
 | FX API down (fetchExchangeRates throws) | Re-throw as-is — `index.js` returns 500 |
 | Other Gemini/network error | Re-throw as-is — `index.js` returns 500 |
@@ -208,5 +210,5 @@ Declare `const amountRef = useRef(null)` in `Recommendations.jsx` and attach it 
 - No caching of extraction results
 - No multi-turn conversation
 - No frontend unit tests (the smart fill panel is thin UI logic; covered by the backend tests + manual verification)
-- No prompt length validation — the only validation on the textarea is non-empty; extremely long prompts are passed through to Gemini as-is (Gemini will handle or reject them)
+- Prompt length is capped at 1000 characters server-side (throws 400 `prompt too long`); no frontend character counter is shown
 - No validation of `fetchExchangeRates` return shape — tests mock `fetchExchangeRates` to return the documented shape `{ rates: { USD, EUR, JPY } }`; malformed responses from the FX service are out of scope for these unit tests
