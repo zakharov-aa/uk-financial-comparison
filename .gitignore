@@ -4,7 +4,7 @@ env.json
 node_modules/
 frontend/build/
 .aws-sam/
-samconfig.toml
+# samconfig.toml intentionally committed (no secrets, only deploy defaults)
 coverage/
 *.log
 *-event.json
