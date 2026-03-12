@@ -20,9 +20,10 @@ export default function Compare() {
         body: JSON.stringify({ category, criteria: { amount: parseInt(amount), ltv: parseInt(ltv) } }),
       });
       const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Failed to compare');
       setResult(data);
-    } catch {
-      setError('Failed to compare. Please try again.');
+    } catch (err) {
+      setError(err.message || 'Failed to compare. Please try again.');
     } finally {
       setLoading(false);
     }

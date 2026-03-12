@@ -12,7 +12,7 @@ export default function Recommendations() {
   const [result, setResult] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
-  const [useAI, setUseAI] = useState(true);
+  const [useAI, setUseAI] = useState(false);
   const [incomeEntries, setIncomeEntries] = useState([{ amount: '', currency: 'GBP' }]);
   const [bankAmount, setBankAmount] = useState('');
   const [bankAmountCurrency, setBankAmountCurrency] = useState('GBP');
@@ -108,11 +108,12 @@ export default function Recommendations() {
                 placeholder="e.g. 60000"
                 value={entry.amount}
                 onChange={e => updateEntry(i, 'amount', e.target.value)}
-                style={{ flex: 1 }}
+                style={{ flex: 1, minWidth: '140px' }}
               />
               <select
                 value={entry.currency}
                 onChange={e => updateEntry(i, 'currency', e.target.value)}
+                style={{ width: '72px', flexShrink: 0 }}
               >
                 {CURRENCIES.map(c => <option key={c} value={c}>{c}</option>)}
               </select>
@@ -139,11 +140,12 @@ export default function Recommendations() {
               placeholder="e.g. 50000"
               value={bankAmount}
               onChange={e => setBankAmount(e.target.value)}
-              style={{ flex: 1 }}
+              style={{ flex: 1, minWidth: '140px' }}
             />
             <select
               value={bankAmountCurrency}
               onChange={e => setBankAmountCurrency(e.target.value)}
+              style={{ width: '72px', flexShrink: 0 }}
             >
               {CURRENCIES.map(c => <option key={c} value={c}>{c}</option>)}
             </select>
@@ -157,12 +159,11 @@ export default function Recommendations() {
                 placeholder="Describe your situation: income, existing debts, credit score, savings, employment type, how long you plan to stay in the property, etc."
                 value={situation}
                 onChange={e => setSituation(e.target.value)}
-                required
               />
             </>
           )}
 
-          <button className="btn" type="submit" disabled={loading || !amount || (useAI && !situation)}>
+          <button className="btn" type="submit" disabled={loading || !amount}>
             {loading ? 'Getting recommendation...' : useAI ? 'Get AI Recommendation' : 'Get Recommendation'}
           </button>
         </form>

@@ -32,8 +32,13 @@ async function handleCompare({ category, criteria = {} }) {
       totalCost: amount ? Math.round(calculateMonthlyPayment(amount, option.rate) * 300) : null,
     }));
 
-    const prompt = buildMortgagePrompt(rateData, amount, JSON.stringify(criteria));
-    const aiSummary = await getAIAnalysis(prompt);
+    let aiSummary = null;
+    try {
+      const prompt = buildMortgagePrompt(rateData, amount, JSON.stringify(criteria));
+      aiSummary = await getAIAnalysis(prompt);
+    } catch (err) {
+      console.warn('AI summary unavailable:', err.message);
+    }
 
     return { comparison, aiSummary, meta: { category, criteria } };
   }
