@@ -28,7 +28,10 @@ async function fetchMortgageRates() {
   }
 
   try {
-    const response = await fetch(BOE_URL);
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 10000);
+    const response = await fetch(BOE_URL, { signal: controller.signal });
+    clearTimeout(timeoutId);
     const csvText = await response.text();
     const parsed = await parseBoeCSV(csvText);
     const normalized = normalizeMortgageRates(parsed);

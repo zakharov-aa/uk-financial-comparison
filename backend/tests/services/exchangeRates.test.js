@@ -92,4 +92,38 @@ describe('fetchExchangeRates', () => {
 
     await expect(fetchExchangeRates()).rejects.toThrow('Network error');
   });
+
+  test('calls fetch with an abort signal for timeout protection', async () => {
+    s3Mock.on(GetObjectCommand).rejects({ name: 'NoSuchKey' });
+    s3Mock.on(PutObjectCommand).resolves({});
+    global.fetch = jest.fn().mockResolvedValue({
+      json: async () => ({ quotes: { GBPUSD: 1.27, GBPEUR: 1.18, GBPJPY: 190.5 }, date: '2026-03-12' }),
+    });
+    await fetchExchangeRates();
+    const [, options] = global.fetch.mock.calls[0];
+    expect(options?.signal).toBeDefined();
+  });
+
+  test('returns stale data when fetch is aborted and cache is available', async () => {
+    const staleData = {
+      data: { base: 'GBP', rates: { USD: 1.20 } },
+      cachedAt: new Date(Date.now() - 7 * 60 * 60 * 1000).toISOString(),
+    };
+    s3Mock.on(GetObjectCommand).resolves({
+      Body: { transformToString: async () => JSON.stringify(staleData) },
+    });
+    const abortError = new Error('The operation was aborted');
+    abortError.name = 'AbortError';
+    global.fetch = jest.fn().mockRejectedValue(abortError);
+    const result = await fetchExchangeRates();
+    expect(result.stale).toBe(true);
+  });
+
+  test('throws when fetch is aborted and no cache available', async () => {
+    s3Mock.on(GetObjectCommand).rejects({ name: 'NoSuchKey' });
+    const abortError = new Error('The operation was aborted');
+    abortError.name = 'AbortError';
+    global.fetch = jest.fn().mockRejectedValue(abortError);
+    await expect(fetchExchangeRates()).rejects.toThrow('The operation was aborted');
+  });
 });

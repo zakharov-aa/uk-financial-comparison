@@ -1,6 +1,6 @@
 const { GoogleGenerativeAI } = require('@google/generative-ai');
 
-function buildMortgagePrompt(rateData, amount, situation) {
+function buildMortgagePrompt(rateData, amount, situation, annualIncome = 0, bankAmount = 0) {
   const { current, history } = rateData;
   const recentHistory = (history || []).slice(-6).map(h =>
     `${h.date}: 2yr=${h.twoYear}%, 5yr=${h.fiveYear}%`
@@ -19,7 +19,7 @@ ${recentHistory}
 USER SITUATION:
 - Loan amount: £${amount?.toLocaleString('en-GB')}
 - Financial profile: ${situation}
-
+${annualIncome > 0 ? `- Annual income after taxes: £${annualIncome.toLocaleString('en-GB')}\n` : ''}${bankAmount > 0 ? `- Current savings / bank balance: £${bankAmount.toLocaleString('en-GB')}\n` : ''}
 Please provide:
 1. A clear recommendation (fix or variable, which term)
 2. Key factors that support this recommendation

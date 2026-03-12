@@ -35,6 +35,24 @@ describe('buildMortgagePrompt', () => {
     const prompt = buildMortgagePrompt({ current: {}, history: [] }, undefined, 'test');
     expect(typeof prompt).toBe('string');
   });
+
+  test('appends income and bank to USER SITUATION when both > 0', () => {
+    const prompt = buildMortgagePrompt(
+      { current: { twoYear: 4.5, fiveYear: 4.3 }, history: [] },
+      200000, 'test situation', 75000, 50000
+    );
+    expect(prompt).toContain('Annual income after taxes');
+    expect(prompt).toContain('£75,000');
+    expect(prompt).toContain('£50,000');
+  });
+
+  test('omits income and bank lines when both are 0', () => {
+    const prompt = buildMortgagePrompt(
+      { current: { twoYear: 4.5, fiveYear: 4.3 }, history: [] },
+      200000, 'test situation', 0, 0
+    );
+    expect(prompt).not.toContain('Annual income after taxes');
+  });
 });
 
 describe('buildSavingsPrompt', () => {

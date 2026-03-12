@@ -1,9 +1,12 @@
 const { fetchMortgageRates } = require('../services/boe');
 const { fetchExchangeRates } = require('../services/exchangeRates');
 const { buildMortgagePrompt, buildSavingsPrompt, getAIAnalysis } = require('../services/gemini');
+const { buildBasicRecommendation } = require('../services/basicRecommendation');
 
-async function handleRecommendations({ category = 'mortgages', amount, situation = '' }) {
+async function handleRecommendations({ category = 'mortgages', amount, situation = '', annualIncome, bankAmount, useAI = 'true' }) {
   const parsedAmount = parseInt(amount, 10) || 0;
+  const parsedIncome = Math.max(0, parseFloat(annualIncome) || 0);
+  const parsedBank = Math.max(0, parseFloat(bankAmount) || 0);
 
   if (category === 'exchange-rates') {
     const rateData = await fetchExchangeRates();
@@ -17,10 +20,15 @@ async function handleRecommendations({ category = 'mortgages', amount, situation
     };
   }
 
-  // mortgages (default) and savings both use BoE rate data
   const rateData = await fetchMortgageRates();
-  const prompt = buildMortgagePrompt(rateData, parsedAmount, situation);
-  const recommendation = await getAIAnalysis(prompt);
+
+  let recommendation;
+  if (useAI === 'false') {
+    recommendation = buildBasicRecommendation(rateData, parsedAmount, parsedIncome, parsedBank);
+  } else {
+    const prompt = buildMortgagePrompt(rateData, parsedAmount, situation, parsedIncome, parsedBank);
+    recommendation = await getAIAnalysis(prompt);
+  }
 
   return {
     recommendation,

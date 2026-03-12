@@ -21,7 +21,10 @@ async function fetchExchangeRates() {
   try {
     const apiKey = process.env.EXCHANGE_RATES_API_KEY;
     const url = `https://api.exchangerate.host/live?access_key=${apiKey}&source=GBP&currencies=USD,EUR,JPY`;
-    const response = await fetch(url);
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 10000);
+    const response = await fetch(url, { signal: controller.signal });
+    clearTimeout(timeoutId);
     const json = await response.json();
 
     // exchangerate.host returns rates as GBPUSD, GBPEUR etc.

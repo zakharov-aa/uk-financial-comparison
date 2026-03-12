@@ -10,19 +10,26 @@ export default function Recommendations() {
   const [result, setResult] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
+  const [hasError, setHasError] = useState(false);
+  const [useAI, setUseAI] = useState(true);
+  const [annualIncome, setAnnualIncome] = useState('');
+  const [bankAmount, setBankAmount] = useState('');
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     setLoading(true);
     setError(null);
     try {
-      const params = new URLSearchParams({ category, amount, situation });
+      const params = new URLSearchParams({ category, amount, situation, useAI: String(useAI) });
+      if (annualIncome !== '') params.set('annualIncome', annualIncome);
+      if (bankAmount !== '') params.set('bankAmount', bankAmount);
       const res = await fetch(`${API_BASE}/recommendations?${params}`);
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Failed to get recommendation');
       setResult(data);
     } catch (err) {
       setError(err.message || 'Failed to get recommendation. Please try again.');
+      setHasError(true);
     } finally {
       setLoading(false);
     }
@@ -62,6 +69,36 @@ export default function Recommendations() {
       </div>
 
       {error && <div className="error">{error}</div>}
+
+      {hasError && (
+        <div className="card">
+          <h3 style={{ marginBottom: '1rem' }}>Provide More Detail</h3>
+          <label>Annual Income After Taxes (£)</label>
+          <input
+            type="number"
+            min="0"
+            placeholder="e.g. 75000"
+            value={annualIncome}
+            onChange={e => setAnnualIncome(e.target.value)}
+          />
+          <label>Current Amount in the Bank (£)</label>
+          <input
+            type="number"
+            min="0"
+            placeholder="e.g. 50000"
+            value={bankAmount}
+            onChange={e => setBankAmount(e.target.value)}
+          />
+          <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginTop: '0.5rem' }}>
+            <input
+              type="checkbox"
+              checked={useAI}
+              onChange={e => setUseAI(e.target.checked)}
+            />
+            Use AI Recommendation
+          </label>
+        </div>
+      )}
 
       {result && (
         <>
