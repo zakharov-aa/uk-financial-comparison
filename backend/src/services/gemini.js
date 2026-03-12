@@ -29,6 +29,30 @@ Please provide:
 Be specific and practical. Base your answer on the actual rate data provided.`;
 }
 
+function buildExtractionPrompt(text) {
+  return `You are a financial data extractor. Extract structured data from the following user description and return ONLY a valid JSON object — no markdown, no code fences, no explanation.
+
+Return this exact JSON shape:
+{
+  "category": "mortgages",
+  "amount": 320000,
+  "amountCurrency": "USD",
+  "incomeEntries": [{ "amount": 150000, "currency": "USD" }],
+  "situation": "one-sentence summary"
+}
+
+Rules:
+- "category" must be exactly "mortgages" or "savings" — infer from context, default to "mortgages"
+- "amount" is the loan or savings amount; use explicit number if stated, otherwise estimate realistically for the described location/property type
+- "amountCurrency" is the natural currency for the described location (e.g. "USD" for US, "GBP" for UK, "EUR" for Eurozone); default to "GBP" if unclear
+- "incomeEntries" is an array of { amount, currency } — one per income source mentioned; estimate realistically for role/location if not stated; currency must be one of GBP, USD, EUR, JPY (use the closest supported currency for the described location)
+- "situation" is a clean one-sentence summary of the user's description
+- Return ONLY valid JSON — no markdown, no explanation
+
+User description:
+${text}`;
+}
+
 async function getAIAnalysis(prompt) {
   const apiKey = process.env.GEMINI_API_KEY;
   if (!apiKey) throw new Error('GEMINI_API_KEY not set');
@@ -39,4 +63,4 @@ async function getAIAnalysis(prompt) {
   return result.response.text();
 }
 
-module.exports = { buildMortgagePrompt, getAIAnalysis };
+module.exports = { buildMortgagePrompt, buildExtractionPrompt, getAIAnalysis };

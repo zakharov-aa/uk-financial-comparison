@@ -1,4 +1,4 @@
-const { buildMortgagePrompt, getAIAnalysis } = require('../../src/services/gemini');
+const { buildMortgagePrompt, buildExtractionPrompt, getAIAnalysis } = require('../../src/services/gemini');
 
 describe('buildMortgagePrompt', () => {
   test('includes loan amount and situation in prompt', () => {
@@ -65,7 +65,40 @@ jest.mock('@google/generative-ai', () => ({
   })),
 }));
 
+describe('buildExtractionPrompt', () => {
+  test("includes the user's text in the returned prompt string", () => {
+    const prompt = buildExtractionPrompt('senior engineer in Colorado');
+    expect(prompt).toContain('senior engineer in Colorado');
+  });
+
+  test('contains the word "JSON" to instruct Gemini to return JSON only', () => {
+    const prompt = buildExtractionPrompt('test');
+    expect(prompt).toContain('JSON');
+  });
+
+  test('contains "mortgages" and "savings" as the valid category values', () => {
+    const prompt = buildExtractionPrompt('test');
+    expect(prompt).toContain('mortgages');
+    expect(prompt).toContain('savings');
+  });
+
+  test('contains "amountCurrency" to ensure the currency field is requested', () => {
+    const prompt = buildExtractionPrompt('test');
+    expect(prompt).toContain('amountCurrency');
+  });
+});
+
 describe('getAIAnalysis', () => {
+  let originalKey;
+  beforeEach(() => { originalKey = process.env.GEMINI_API_KEY; });
+  afterEach(() => {
+    if (originalKey === undefined) {
+      delete process.env.GEMINI_API_KEY;
+    } else {
+      process.env.GEMINI_API_KEY = originalKey;
+    }
+  });
+
   test('throws when GEMINI_API_KEY is not set', async () => {
     delete process.env.GEMINI_API_KEY;
     await expect(getAIAnalysis('test prompt')).rejects.toThrow('GEMINI_API_KEY not set');
@@ -75,5 +108,17 @@ describe('getAIAnalysis', () => {
     process.env.GEMINI_API_KEY = 'test-key';
     const result = await getAIAnalysis('test prompt');
     expect(result).toBe('AI analysis result');
+  });
+
+  test('rejects with the error thrown by generateContent', async () => {
+    process.env.GEMINI_API_KEY = 'test-key';
+    const { GoogleGenerativeAI } = require('@google/generative-ai');
+    const mockError = new Error('network failure');
+    GoogleGenerativeAI.mockImplementationOnce(() => ({
+      getGenerativeModel: jest.fn().mockReturnValue({
+        generateContent: jest.fn().mockRejectedValue(mockError),
+      }),
+    }));
+    await expect(getAIAnalysis('test prompt')).rejects.toBe(mockError);
   });
 });
