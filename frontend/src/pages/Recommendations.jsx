@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import API_BASE from '../config';
 
@@ -16,6 +16,53 @@ export default function Recommendations() {
   const [incomeEntries, setIncomeEntries] = useState([{ amount: '', currency: 'GBP' }]);
   const [bankAmount, setBankAmount] = useState('');
   const [bankAmountCurrency, setBankAmountCurrency] = useState('GBP');
+  const [aiFilledFields, setAiFilledFields] = useState(new Set());
+  const [smartFillPrompt, setSmartFillPrompt] = useState('');
+  const [smartFillLoading, setSmartFillLoading] = useState(false);
+  const [smartFillError, setSmartFillError] = useState(null);
+  const amountRef = useRef(null);
+
+  function markUserEdited(fieldName) {
+    setAiFilledFields(prev => {
+      const next = new Set(prev);
+      next.delete(fieldName);
+      return next;
+    });
+  }
+
+  const handleSmartFill = async () => {
+    setSmartFillLoading(true);
+    setSmartFillError(null);
+    try {
+      const res = await fetch(`${API_BASE}/extract-fields?prompt=${encodeURIComponent(smartFillPrompt)}`);
+      const data = await res.json();
+      if (!res.ok) {
+        setSmartFillError(
+          res.status === 429
+            ? 'AI quota exceeded — please fill in the fields manually'
+            : 'Smart fill unavailable — please fill in the fields manually'
+        );
+        return;
+      }
+      const filled = new Set();
+      const prevAmount = amount;
+      if (data.category) { setCategory(data.category); filled.add('category'); }
+      if (data.amount != null) { setAmount(String(Math.round(data.amount))); filled.add('amount'); }
+      if (Array.isArray(data.incomeEntries) && data.incomeEntries.length > 0) {
+        setIncomeEntries(data.incomeEntries.map(e => ({ amount: String(e.amount), currency: e.currency })));
+        filled.add('incomeEntries');
+      }
+      if (data.situation) { setSituation(data.situation); filled.add('situation'); }
+      setAiFilledFields(filled);
+      if (data.amount != null && String(Math.round(data.amount)) !== prevAmount) {
+        amountRef.current?.scrollIntoView({ behavior: 'smooth' });
+      }
+    } catch {
+      setSmartFillError('Smart fill unavailable — please fill in the fields manually');
+    } finally {
+      setSmartFillLoading(false);
+    }
+  };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -47,14 +94,17 @@ export default function Recommendations() {
     const updated = [...incomeEntries];
     updated[index] = { ...updated[index], [field]: value };
     setIncomeEntries(updated);
+    markUserEdited('incomeEntries');
   }
 
   function removeEntry(index) {
     setIncomeEntries(incomeEntries.filter((_, i) => i !== index));
+    markUserEdited('incomeEntries');
   }
 
   function addEntry() {
     setIncomeEntries([...incomeEntries, { amount: '', currency: 'GBP' }]);
+    markUserEdited('incomeEntries');
   }
 
   return (
@@ -82,24 +132,64 @@ export default function Recommendations() {
         {useAI ? '✓ Using AI (Gemini)' : 'Rule-based only'}
       </div>
 
+      {/* Smart Fill panel */}
+      <div className="card" style={{ marginBottom: '1rem' }}>
+        <label style={{ marginBottom: '0.5rem', display: 'block', fontWeight: 600 }}>Smart Fill</label>
+        <textarea
+          rows={3}
+          placeholder='Describe your situation in plain English, e.g. "I am a senior engineer in the US and want to buy a home in Colorado"'
+          value={smartFillPrompt}
+          onChange={e => setSmartFillPrompt(e.target.value)}
+          style={{ marginBottom: '0.75rem' }}
+        />
+        <button
+          type="button"
+          className="btn"
+          onClick={handleSmartFill}
+          disabled={smartFillLoading || !smartFillPrompt.trim()}
+        >
+          {smartFillLoading ? 'Filling…' : 'Fill Form'}
+        </button>
+        {smartFillError && (
+          <div style={{ marginTop: '0.5rem', color: '#856404', background: '#fff3cd', border: '1px solid #ffeeba', borderRadius: '4px', padding: '0.5rem 0.75rem', fontSize: '0.875rem' }}>
+            {smartFillError}
+          </div>
+        )}
+      </div>
+
       <div className="card">
         <form onSubmit={handleSubmit}>
-          <label>Product Category</label>
-          <select value={category} onChange={e => setCategory(e.target.value)}>
+          <label>
+            Product Category
+            {aiFilledFields.has('category') && <span style={{ color: '#27ae60', fontSize: '0.75rem', marginLeft: '0.5rem' }}>✦ AI</span>}
+          </label>
+          <select
+            value={category}
+            onChange={e => { setCategory(e.target.value); markUserEdited('category'); }}
+            style={aiFilledFields.has('category') ? { borderLeft: '3px solid #27ae60' } : {}}
+          >
             <option value="mortgages">Mortgages</option>
             <option value="savings">Savings</option>
           </select>
 
-          <label>Amount (£)</label>
+          <label>
+            Amount (£)
+            {aiFilledFields.has('amount') && <span style={{ color: '#27ae60', fontSize: '0.75rem', marginLeft: '0.5rem' }}>✦ AI</span>}
+          </label>
           <input
+            ref={amountRef}
             type="number"
             placeholder="e.g. 200000 for a mortgage, 50000 for savings"
             value={amount}
-            onChange={e => setAmount(e.target.value)}
+            onChange={e => { setAmount(e.target.value); markUserEdited('amount'); }}
             required
+            style={aiFilledFields.has('amount') ? { borderLeft: '3px solid #27ae60' } : {}}
           />
 
-          <label>Annual Income After Taxes</label>
+          <label>
+            Annual Income After Taxes
+            {aiFilledFields.has('incomeEntries') && <span style={{ color: '#27ae60', fontSize: '0.75rem', marginLeft: '0.5rem' }}>✦ AI</span>}
+          </label>
           {incomeEntries.map((entry, i) => (
             <div key={i} style={{ display: 'flex', gap: '0.5rem', marginBottom: '0.5rem' }}>
               <input
@@ -108,7 +198,7 @@ export default function Recommendations() {
                 placeholder="e.g. 60000"
                 value={entry.amount}
                 onChange={e => updateEntry(i, 'amount', e.target.value)}
-                style={{ flex: 1, minWidth: '140px' }}
+                style={{ flex: 1, minWidth: '140px', ...(aiFilledFields.has('incomeEntries') ? { borderLeft: '3px solid #27ae60' } : {}) }}
               />
               <select
                 value={entry.currency}
@@ -153,12 +243,16 @@ export default function Recommendations() {
 
           {useAI && (
             <>
-              <label>Your Financial Situation</label>
+              <label>
+                Your Financial Situation
+                {aiFilledFields.has('situation') && <span style={{ color: '#27ae60', fontSize: '0.75rem', marginLeft: '0.5rem' }}>✦ AI</span>}
+              </label>
               <textarea
                 rows={4}
                 placeholder="Describe your situation: income, existing debts, credit score, savings, employment type, how long you plan to stay in the property, etc."
                 value={situation}
-                onChange={e => setSituation(e.target.value)}
+                onChange={e => { setSituation(e.target.value); markUserEdited('situation'); }}
+                style={aiFilledFields.has('situation') ? { borderLeft: '3px solid #27ae60' } : {}}
               />
             </>
           )}
