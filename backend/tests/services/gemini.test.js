@@ -1,5 +1,15 @@
 const { buildMortgagePrompt, buildExtractionPrompt, getAIAnalysis } = require('../../src/services/gemini');
 
+jest.mock('@google/generative-ai', () => ({
+  GoogleGenerativeAI: jest.fn().mockImplementation(() => ({
+    getGenerativeModel: jest.fn().mockReturnValue({
+      generateContent: jest.fn().mockResolvedValue({
+        response: { text: () => 'AI analysis result' },
+      }),
+    }),
+  })),
+}));
+
 describe('buildMortgagePrompt', () => {
   test('includes loan amount and situation in prompt', () => {
     const prompt = buildMortgagePrompt(
@@ -54,16 +64,6 @@ describe('buildMortgagePrompt', () => {
     expect(prompt).not.toContain('Annual income after taxes');
   });
 });
-
-jest.mock('@google/generative-ai', () => ({
-  GoogleGenerativeAI: jest.fn().mockImplementation(() => ({
-    getGenerativeModel: jest.fn().mockReturnValue({
-      generateContent: jest.fn().mockResolvedValue({
-        response: { text: () => 'AI analysis result' },
-      }),
-    }),
-  })),
-}));
 
 describe('buildExtractionPrompt', () => {
   test("includes the user's text in the returned prompt string", () => {

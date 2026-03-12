@@ -36,8 +36,8 @@ Return this exact JSON shape:
 {
   "category": "mortgages",
   "amount": 320000,
-  "amountCurrency": "USD",
-  "incomeEntries": [{ "amount": 150000, "currency": "USD" }],
+  "amountCurrency": "GBP",
+  "incomeEntries": [{ "amount": 55000, "currency": "GBP" }],
   "situation": "one-sentence summary"
 }
 
