@@ -69,7 +69,7 @@ Rules embedded in the prompt:
 2. Call `getAIAnalysis(buildExtractionPrompt(prompt))` — i.e. pass the return value of `buildExtractionPrompt` as the argument to `getAIAnalysis`
 3. `JSON.parse` the response — if parsing fails, throw `{ statusCode: 422, message: 'extraction_failed' }`
 4. If `amountCurrency` is missing, default it to `'GBP'`
-5. If `amountCurrency !== 'GBP'`: import `fetchExchangeRates` from `../services/exchangeRates` and convert `amount` to GBP using `amount / rates[amountCurrency]`
+5. If `amountCurrency !== 'GBP'`: import `fetchExchangeRates` from `../services/exchangeRates`, call it, destructure `fxData.rates`, and convert using `amount / fxData.rates[amountCurrency]`. The `fetchExchangeRates` return shape is `{ base, date, rates: { USD, EUR, JPY }, stale }` — access `fxData.rates`, not the top-level object. If `fetchExchangeRates` throws (FX API down, no stale cache), re-throw as-is — `index.js` returns 500 to the client
 6. If `incomeEntries` is missing or not an array, default to `[]` — income entries are **left in their original currency** (the Recommendations handler already converts them server-side)
 7. Return:
 
@@ -91,6 +91,7 @@ All errors are **thrown** (not returned directly) so the existing centralised ha
 | Missing/empty `prompt` | `{ statusCode: 400, message: 'prompt is required' }` |
 | Gemini 429 | Re-throw as-is — `index.js` catches `err.status === 429` and returns `"AI service quota exceeded"` |
 | JSON parse failure | `{ statusCode: 422, message: 'extraction_failed' }` |
+| FX API down (fetchExchangeRates throws) | Re-throw as-is — `index.js` returns 500 |
 | Other Gemini/network error | Re-throw as-is — `index.js` returns 500 |
 
 The frontend treats any non-200 response as a smart fill failure and shows the appropriate message (see Frontend section).
@@ -147,7 +148,7 @@ The `incomeEntries` indicator (border + badge on the section label) clears as so
 
 ### Scroll behaviour
 
-On successful fill, scroll to the `amount` input (first meaningfully-changed numeric field), not `category` (which defaults to mortgages and may not have changed).
+On successful fill, scroll to the `amount` input **if and only if** the returned `amount` value differs from the current form state. If `amount` is unchanged or absent, do not scroll. There is no fallback scroll target — if `amount` did not change, no scroll occurs.
 
 ---
 
@@ -177,6 +178,7 @@ On successful fill, scroll to the `amount` input (first meaningfully-changed num
 - Gemini throws 429 → error propagates (not swallowed)
 - `amountCurrency` absent from Gemini response → defaults to `'GBP'`, no FX call
 - `incomeEntries` absent from Gemini response → defaults to `[]`
+- FX API throws → error propagates (not swallowed)
 
 ### `backend/tests/services/gemini.test.js` additions
 
@@ -187,7 +189,7 @@ On successful fill, scroll to the `amount` input (first meaningfully-changed num
 - Contains `"amountCurrency"` (ensures the currency field is requested)
 
 **Fixes to existing `getAIAnalysis` describe block:**
-- Add `afterEach(() => { delete process.env.GEMINI_API_KEY; })` — current tests delete the key but don't restore it, which can cause ordering-dependent failures
+- Add `afterEach(() => { delete process.env.GEMINI_API_KEY; })` — the second test leaves the key set after it runs, which can cause ordering-dependent failures in other test files. Since the key did not exist before the suite ran, deleting it after each test is the correct cleanup (there is no prior value to restore)
 - Add test: `generateContent` throws an error → `getAIAnalysis` rejects with that error (currently not tested, leaving the error propagation path uncovered)
 
 ---
