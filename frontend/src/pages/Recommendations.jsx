@@ -34,7 +34,13 @@ export default function Recommendations() {
     setSmartFillLoading(true);
     setSmartFillError(null);
     try {
-      const res = await fetch(`${API_BASE}/extract-fields?prompt=${encodeURIComponent(smartFillPrompt)}`);
+      let res = await fetch(`${API_BASE}/extract-fields?prompt=${encodeURIComponent(smartFillPrompt)}`);
+      if (res.status === 429) {
+        setSmartFillError('Rate limited — retrying in 5 seconds…');
+        await new Promise(resolve => setTimeout(resolve, 5000));
+        setSmartFillError(null);
+        res = await fetch(`${API_BASE}/extract-fields?prompt=${encodeURIComponent(smartFillPrompt)}`);
+      }
       const data = await res.json();
       if (!res.ok) {
         setSmartFillError(
