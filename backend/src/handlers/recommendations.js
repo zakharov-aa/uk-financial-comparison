@@ -1,24 +1,61 @@
 const { fetchMortgageRates } = require('../services/boe');
 const { fetchExchangeRates } = require('../services/exchangeRates');
-const { buildMortgagePrompt, buildSavingsPrompt, getAIAnalysis } = require('../services/gemini');
+const { buildMortgagePrompt, getAIAnalysis } = require('../services/gemini');
 const { buildBasicRecommendation } = require('../services/basicRecommendation');
 
-async function handleRecommendations({ category = 'mortgages', amount, situation = '', annualIncome, bankAmount, useAI = 'true' }) {
-  const parsedAmount = parseInt(amount, 10) || 0;
-  const parsedIncome = Math.max(0, parseFloat(annualIncome) || 0);
-  const parsedBank = Math.max(0, parseFloat(bankAmount) || 0);
+function parseIncomeEntries(raw) {
+  try {
+    const entries = JSON.parse(raw);
+    if (!Array.isArray(entries)) return [];
+    return entries.map(e => ({
+      amount: Math.max(0, parseFloat(e.amount) || 0),
+      currency: (typeof e.currency === 'string' && e.currency) ? e.currency : 'GBP',
+    }));
+  } catch {
+    return [];
+  }
+}
 
-  if (category === 'exchange-rates') {
-    const rateData = await fetchExchangeRates();
-    const prompt = buildSavingsPrompt(rateData, parsedAmount);
-    const recommendation = await getAIAnalysis(prompt);
-    return {
-      recommendation,
-      currentRates: rateData,
-      generatedAt: new Date().toISOString(),
-      category,
-      aiUsed: true,
-    };
+function needsConversion(entries, bankAmount, bankCurrency) {
+  return (bankAmount > 0 && bankCurrency !== 'GBP')
+    || entries.some(e => e.amount > 0 && e.currency !== 'GBP');
+}
+
+function convertToGBP(amount, currency, rates) {
+  if (currency === 'GBP') return amount;
+  return amount / rates[currency];
+}
+
+function totalIncomeGBP(entries, rates) {
+  return entries
+    .filter(e => e.amount > 0)
+    .reduce((sum, e) => sum + convertToGBP(e.amount, e.currency, rates), 0);
+}
+
+async function handleRecommendations({
+  category = 'mortgages',
+  amount,
+  situation = '',
+  incomeEntries = '[]',
+  bankAmount,
+  bankAmountCurrency = 'GBP',
+  useAI = 'true',
+}) {
+  const parsedAmount = parseInt(amount, 10) || 0;
+  const entries = parseIncomeEntries(incomeEntries);
+  let parsedBank = Math.max(0, parseFloat(bankAmount) || 0);
+  const parsedBankCurrency = bankAmountCurrency || 'GBP';
+
+  let parsedIncome;
+  if (needsConversion(entries, parsedBank, parsedBankCurrency)) {
+    const fxData = await fetchExchangeRates();
+    const rates = fxData.rates;
+    parsedIncome = totalIncomeGBP(entries, rates);
+    parsedBank = convertToGBP(parsedBank, parsedBankCurrency, rates);
+  } else {
+    parsedIncome = entries
+      .filter(e => e.amount > 0)
+      .reduce((sum, e) => sum + e.amount, 0);
   }
 
   const rateData = await fetchMortgageRates();
