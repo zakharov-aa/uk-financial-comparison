@@ -100,7 +100,7 @@ The frontend treats any non-200 response as a smart fill failure and shows the a
 ### New route in `index.js`
 
 ```javascript
-const handleExtractFields = require('./handlers/extractFields');
+const { handleExtractFields } = require('./handlers/extractFields');
 
 // ...
 
