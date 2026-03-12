@@ -23,7 +23,9 @@ function needsConversion(entries, bankAmount, bankCurrency) {
 
 function convertToGBP(amount, currency, rates) {
   if (currency === 'GBP') return amount;
-  return amount / rates[currency];
+  const rate = rates[currency];
+  if (!rate) throw new Error(`Unsupported currency: ${currency}`);
+  return amount / rate;
 }
 
 function totalIncomeGBP(entries, rates) {
