@@ -59,7 +59,7 @@ Rules embedded in the prompt:
 - `category` must be exactly `"mortgages"` or `"savings"` — infer from context, default to `"mortgages"`
 - `amount` is the loan or savings amount; use explicit number if stated, otherwise estimate realistically for the described location/property type
 - `amountCurrency` is the natural currency for the described location (e.g. `"USD"` for US, `"GBP"` for UK, `"EUR"` for Eurozone); default to `"GBP"` if unclear
-- `incomeEntries` is an array of `{ amount, currency }` — one per income source mentioned; estimate realistically for role/location if not stated; use the location's natural currency
+- `incomeEntries` is an array of `{ amount, currency }` — one per income source mentioned; estimate realistically for role/location if not stated; currency must be one of `GBP`, `USD`, `EUR`, `JPY` (the only currencies the FX service supports) — use the closest supported currency for the described location
 - `situation` is a clean one-sentence summary of the user's description for later use in the AI recommendation
 - Return **only** valid JSON — no markdown, no explanation
 
@@ -69,7 +69,7 @@ Rules embedded in the prompt:
 2. Call `getAIAnalysis(buildExtractionPrompt(prompt))` — i.e. pass the return value of `buildExtractionPrompt` as the argument to `getAIAnalysis`
 3. `JSON.parse` the response — if parsing fails, throw `{ statusCode: 422, message: 'extraction_failed' }`
 4. If `amountCurrency` is missing, default it to `'GBP'`
-5. If `amountCurrency !== 'GBP'`: import `fetchExchangeRates` from `../services/exchangeRates`, call it, destructure `fxData.rates`, and convert using `amount / fxData.rates[amountCurrency]`. The `fetchExchangeRates` return shape is `{ base, date, rates: { USD, EUR, JPY }, stale }` — access `fxData.rates`, not the top-level object. If `fetchExchangeRates` throws (FX API down, no stale cache), re-throw as-is — `index.js` returns 500 to the client
+5. If `amountCurrency !== 'GBP'`: import `fetchExchangeRates` from `../services/exchangeRates`, call it, and convert using `amount / fxData.rates[amountCurrency]`. The `fetchExchangeRates` return shape is `{ base, date, rates: { USD, EUR, JPY }, stale }` — access `fxData.rates`, not the top-level object. Rate direction: `fxData.rates.USD = 1.27` means £1 = $1.27 (foreign units per GBP), so dividing a foreign amount by the rate converts it to GBP. If `fetchExchangeRates` throws (FX API down, no stale cache), re-throw as-is — `index.js` returns 500 to the client
 6. If `incomeEntries` is missing or not an array, default to `[]` — income entries are **left in their original currency** (the Recommendations handler already converts them server-side)
 7. Return:
 
@@ -156,7 +156,7 @@ On successful fill, scroll to the `amount` input **if and only if** the returned
 
 | File | Change |
 |------|--------|
-| `backend/src/services/gemini.js` | Add `buildExtractionPrompt`; export it |
+| `backend/src/services/gemini.js` | Add `buildExtractionPrompt`; update `module.exports` to `{ buildMortgagePrompt, buildExtractionPrompt, getAIAnalysis }` |
 | `backend/src/handlers/extractFields.js` | New handler |
 | `backend/src/index.js` | Add `GET /extract-fields` route |
 | `backend/tests/handlers/extractFields.test.js` | New test file (see below) |
@@ -178,6 +178,7 @@ On successful fill, scroll to the `amount` input **if and only if** the returned
 - Gemini throws 429 → error propagates (not swallowed)
 - `amountCurrency` absent from Gemini response → defaults to `'GBP'`, no FX call
 - `incomeEntries` absent from Gemini response → defaults to `[]`
+- `incomeEntries` present with non-GBP currency (e.g. USD) → currencies passed through unchanged, no FX call made in `extractFields`
 - FX API throws → error propagates (not swallowed)
 
 ### `backend/tests/services/gemini.test.js` additions
