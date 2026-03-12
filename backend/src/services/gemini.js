@@ -29,20 +29,6 @@ Please provide:
 Be specific and practical. Base your answer on the actual rate data provided.`;
 }
 
-function buildSavingsPrompt(rateData, amount) {
-  return `You are a UK financial advisor. Based on current GBP exchange rates and market conditions, provide insights for someone with £${amount?.toLocaleString('en-GB')} to consider.
-
-CURRENT GBP RATES:
-${JSON.stringify(rateData?.rates || {}, null, 2)}
-
-Provide:
-1. Key insight about the current GBP position
-2. What this means for someone with £${amount?.toLocaleString('en-GB')}
-3. One actionable consideration
-
-Keep it concise and practical.`;
-}
-
 async function getAIAnalysis(prompt) {
   const apiKey = process.env.GEMINI_API_KEY;
   if (!apiKey) throw new Error('GEMINI_API_KEY not set');
@@ -53,4 +39,4 @@ async function getAIAnalysis(prompt) {
   return result.response.text();
 }
 
-module.exports = { buildMortgagePrompt, buildSavingsPrompt, getAIAnalysis };
+module.exports = { buildMortgagePrompt, getAIAnalysis };

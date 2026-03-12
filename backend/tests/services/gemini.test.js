@@ -1,4 +1,4 @@
-const { buildMortgagePrompt, buildSavingsPrompt, getAIAnalysis } = require('../../src/services/gemini');
+const { buildMortgagePrompt, getAIAnalysis } = require('../../src/services/gemini');
 
 describe('buildMortgagePrompt', () => {
   test('includes loan amount and situation in prompt', () => {
@@ -52,23 +52,6 @@ describe('buildMortgagePrompt', () => {
       200000, 'test situation', 0, 0
     );
     expect(prompt).not.toContain('Annual income after taxes');
-  });
-});
-
-describe('buildSavingsPrompt', () => {
-  test('includes amount in prompt', () => {
-    const prompt = buildSavingsPrompt({ rates: { USD: 1.27 } }, 50000);
-    expect(prompt).toContain('£50,000');
-  });
-
-  test('includes rate data in prompt', () => {
-    const prompt = buildSavingsPrompt({ rates: { USD: 1.27, EUR: 1.18 } }, 50000);
-    expect(prompt).toContain('USD');
-  });
-
-  test('handles null rateData gracefully', () => {
-    const prompt = buildSavingsPrompt(null, 50000);
-    expect(typeof prompt).toBe('string');
   });
 });
 
