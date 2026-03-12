@@ -45,6 +45,10 @@ jobs:
               GeminiApiKey=${{ secrets.GEMINI_API_KEY }} \
               ExchangeRatesApiKey=${{ secrets.EXCHANGE_RATES_API_KEY }}
 
+      - name: Install frontend dependencies
+        run: npm install
+        working-directory: frontend
+
       - name: Build React frontend
         run: npm run build
         working-directory: frontend
