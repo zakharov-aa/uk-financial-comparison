@@ -5,6 +5,15 @@
 
 ---
 
+## Features
+
+- **Mortgage rates** — live Bank of England data with 6-month history chart
+- **Exchange rates** — GBP vs USD, EUR, JPY with a built-in currency converter
+- **Compare** — side-by-side mortgage comparison with monthly payment calculations (AI summary when available)
+- **Recommendations** — rule-based or AI-powered (Gemini) mortgage/savings advice with multi-currency income support
+
+---
+
 ## Architecture
 
 ```
@@ -19,9 +28,11 @@ API Gateway (REST)               |
 Lambda (Node.js 20)  -----------+
    |── GET /products/{category}  → Bank of England API (TTL: 24hr)
    |── POST /compare             → Exchange Rates API  (TTL: 6hr)
-   └── GET /recommendations      → Gemini AI (no cache)
+   └── GET /recommendations      → Gemini AI (optional, no cache)
                                  → CloudWatch (logging)
 ```
+
+---
 
 ## Setup
 
@@ -31,20 +42,17 @@ Lambda (Node.js 20)  -----------+
 - Node.js 20.x
 - Docker (for local testing with `sam local`)
 
+Run the setup script to install all dependencies automatically:
+
+```bash
+bash setup.sh
+```
+
 ### API Keys Required
 1. **Gemini API** (free): https://aistudio.google.com/
 2. **Exchange Rates API** (free): https://exchangerate.host/
 
 ### Local Development
-
-```bash
-# Install backend deps and run tests
-cd backend && npm install && npm test
-
-# Start API locally (requires Docker)
-cd .. && sam build
-sam local start-api --env-vars env.json
-```
 
 Create `env.json` in the project root:
 ```json
@@ -58,12 +66,28 @@ Create `env.json` in the project root:
 ```
 
 ```bash
-# Start React frontend (in a separate terminal)
-cd frontend && npm start
-# Set REACT_APP_API_URL=http://localhost:3000 in frontend/.env.local
+# Install backend deps and run tests
+cd backend && npm install && npm test
+
+# Build and start API locally on port 3001 (requires Docker)
+cd .. && sam build
+sam local start-api --env-vars env.json --port 3001
+```
+
+```bash
+# Start React frontend in a separate terminal
+cd frontend
+echo "REACT_APP_API_URL=http://localhost:3001" > .env.local
+npm install && npm start
 ```
 
 ### Deploy to AWS
+
+**Option A — GitHub Actions (recommended):**
+
+Push to `main` automatically runs the full deploy pipeline. See [CI/CD](#cicd) section for required secrets.
+
+**Option B — Manual:**
 
 ```bash
 sam build
@@ -86,6 +110,8 @@ BUCKET=$(aws cloudformation describe-stacks \
 aws s3 sync build/ s3://$BUCKET --delete
 ```
 
+---
+
 ## API Reference
 
 ### GET /products/{category}
@@ -106,7 +132,7 @@ curl https://API_URL/products/mortgages
 ```
 
 ### POST /compare
-Compare products with AI summary.
+Compare mortgage products. Returns comparison table with monthly payments. AI summary is included when Gemini is available, omitted gracefully if quota is exceeded.
 
 ```bash
 curl -X POST https://API_URL/compare \
@@ -115,25 +141,46 @@ curl -X POST https://API_URL/compare \
 ```
 
 ### GET /recommendations
-AI-powered recommendation based on your situation.
+Rule-based or AI-powered recommendation. Supports multi-currency income entries.
+
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| `category` | string | `mortgages` | `mortgages` or `savings` |
+| `amount` | number | — | Loan/savings amount in GBP |
+| `useAI` | boolean | `false` | `true` to use Gemini AI |
+| `situation` | string | — | Free-text description (AI mode only) |
+| `incomeEntries` | JSON string | `[]` | Array of `{amount, currency}` objects |
+| `bankAmount` | number | — | Current savings/deposit amount |
+| `bankAmountCurrency` | string | `GBP` | Currency of `bankAmount` |
 
 ```bash
-curl "https://API_URL/recommendations?category=mortgages&amount=200000&situation=Good+credit+75+LTV"
+# Rule-based (no AI)
+curl "https://API_URL/recommendations?category=mortgages&amount=200000&useAI=false&incomeEntries=[{\"amount\":60000,\"currency\":\"GBP\"}]"
+
+# AI-powered with multi-currency income
+curl "https://API_URL/recommendations?category=mortgages&amount=200000&useAI=true&situation=Good+credit&incomeEntries=[{\"amount\":50000,\"currency\":\"GBP\"},{\"amount\":12700,\"currency\":\"USD\"}]&bankAmount=30000"
 ```
+
+---
 
 ## CI/CD
 
-Push to `main` triggers GitHub Actions:
-1. Runs backend tests
-2. SAM build + deploy
+Push to `main` triggers GitHub Actions (`.github/workflows/deploy.yml`):
+1. Runs backend tests (76 passing)
+2. SAM build + deploy to AWS
 3. React build + S3 sync + CloudFront invalidation
 
-**Required GitHub Secrets:**
-- `AWS_ACCESS_KEY_ID`
-- `AWS_SECRET_ACCESS_KEY`
-- `GEMINI_API_KEY`
-- `EXCHANGE_RATES_API_KEY`
-- `API_URL` (set after first manual deploy)
+**Required GitHub Secrets** (Settings → Secrets and variables → Actions):
+
+| Secret | Description |
+|--------|-------------|
+| `AWS_ACCESS_KEY_ID` | IAM user access key |
+| `AWS_SECRET_ACCESS_KEY` | IAM user secret key |
+| `GEMINI_API_KEY` | Google Gemini API key |
+| `EXCHANGE_RATES_API_KEY` | exchangerate.host API key |
+| `API_URL` | API Gateway URL — add after first successful deploy |
+
+---
 
 ## Project Structure
 
@@ -143,12 +190,13 @@ uk-financial-comparison/
 │   ├── src/
 │   │   ├── index.js              # Lambda entry + router
 │   │   ├── handlers/             # products, compare, recommendations
-│   │   └── services/             # cache, boe, exchangeRates, gemini
-│   └── tests/                    # Jest tests (42 passing)
+│   │   └── services/             # cache, boe, exchangeRates, gemini, basicRecommendation
+│   └── tests/                    # Jest tests (76 passing)
 ├── frontend/
 │   └── src/
-│       ├── pages/                # Home, Products, Compare, Recommendations
+│       ├── pages/                # Home, Products (+ converter), Compare, Recommendations
 │       └── components/           # RateChart
+├── setup.sh                      # One-command local setup
 ├── template.yaml                 # AWS SAM (Lambda + API GW + S3 + CloudFront)
 └── .github/workflows/deploy.yml  # CI/CD
 ```
