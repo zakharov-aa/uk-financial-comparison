@@ -75,10 +75,15 @@ Resources:
 
   FrontendBucket:
     Type: AWS::S3::Bucket
+
+  FrontendOriginAccessControl:
+    Type: AWS::CloudFront::OriginAccessControl
     Properties:
-      WebsiteConfiguration:
-        IndexDocument: index.html
-        ErrorDocument: index.html
+      OriginAccessControlConfig:
+        Name: !Sub '${AWS::StackName}-frontend-oac'
+        OriginAccessControlOriginType: s3
+        SigningBehavior: always
+        SigningProtocol: sigv4
 
   FrontendBucketPolicy:
     Type: AWS::S3::BucketPolicy
@@ -91,6 +96,9 @@ Resources:
               Service: cloudfront.amazonaws.com
             Action: s3:GetObject
             Resource: !Sub '${FrontendBucket.Arn}/*'
+            Condition:
+              StringEquals:
+                aws:SourceArn: !Sub 'arn:aws:cloudfront::${AWS::AccountId}:distribution/${CloudFrontDistribution}'
 
   CloudFrontDistribution:
     Type: AWS::CloudFront::Distribution
@@ -102,12 +110,16 @@ Resources:
             DomainName: !GetAtt FrontendBucket.RegionalDomainName
             S3OriginConfig:
               OriginAccessIdentity: ''
+            OriginAccessControlId: !GetAtt FrontendOriginAccessControl.Id
         DefaultCacheBehavior:
           TargetOriginId: S3Origin
           ViewerProtocolPolicy: redirect-to-https
           ForwardedValues:
             QueryString: false
         CustomErrorResponses:
+          - ErrorCode: 403
+            ResponseCode: 200
+            ResponsePagePath: /index.html
           - ErrorCode: 404
             ResponseCode: 200
             ResponsePagePath: /index.html
