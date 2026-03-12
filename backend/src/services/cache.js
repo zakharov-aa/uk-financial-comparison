@@ -17,17 +17,22 @@ async function getCached(key) {
     return JSON.parse(body);
   } catch (err) {
     if (err.name === 'NoSuchKey') return null;
-    throw err;
+    console.warn('Cache read failed (treating as miss):', err.message);
+    return null;
   }
 }
 
 async function setCached(key, data) {
-  await s3.send(new PutObjectCommand({
-    Bucket: process.env.CACHE_BUCKET_NAME,
-    Key: `cache/${key}.json`,
-    Body: JSON.stringify({ data, cachedAt: new Date().toISOString() }),
-    ContentType: 'application/json',
-  }));
+  try {
+    await s3.send(new PutObjectCommand({
+      Bucket: process.env.CACHE_BUCKET_NAME,
+      Key: `cache/${key}.json`,
+      Body: JSON.stringify({ data, cachedAt: new Date().toISOString() }),
+      ContentType: 'application/json',
+    }));
+  } catch (err) {
+    console.warn('Cache write failed (continuing without cache):', err.message);
+  }
 }
 
 module.exports = { getCached, setCached, isFresh };
