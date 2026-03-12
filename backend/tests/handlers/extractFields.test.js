@@ -62,6 +62,20 @@ describe('handleExtractFields', () => {
       .rejects.toMatchObject({ statusCode: 400, message: 'prompt is required' });
   });
 
+  test('prompt longer than 1000 characters throws 400', async () => {
+    await expect(handleExtractFields({ prompt: 'a'.repeat(1001) }))
+      .rejects.toMatchObject({ statusCode: 400, message: 'prompt too long' });
+  });
+
+  test('non-numeric amount throws 422', async () => {
+    getAIAnalysis.mockResolvedValue(JSON.stringify({
+      category: 'mortgages', amount: null, amountCurrency: 'GBP',
+      incomeEntries: [], situation: 'test',
+    }));
+    await expect(handleExtractFields({ prompt: 'test' }))
+      .rejects.toMatchObject({ statusCode: 422, message: 'extraction_failed' });
+  });
+
   test('Gemini returns malformed JSON throws 422', async () => {
     getAIAnalysis.mockResolvedValue('not json at all');
     await expect(handleExtractFields({ prompt: 'test' }))
