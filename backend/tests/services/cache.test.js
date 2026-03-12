@@ -40,9 +40,10 @@ describe('getCached', () => {
     expect(result).toBeNull();
   });
 
-  test('throws on unexpected S3 error', async () => {
+  test('returns null on unexpected S3 error (treats as cache miss)', async () => {
     s3Mock.on(GetObjectCommand).rejects({ name: 'AccessDenied', message: 'Access denied' });
-    await expect(getCached('boe/mortgage-rates')).rejects.toMatchObject({ name: 'AccessDenied' });
+    const result = await getCached('boe/mortgage-rates');
+    expect(result).toBeNull();
   });
 });
 

@@ -43,10 +43,14 @@ exports.handler = async (event) => {
     };
   } catch (err) {
     console.error('Unhandled error:', err);
+    const statusCode = err.statusCode || (err.status >= 400 ? err.status : 500);
+    const message = err.status === 429
+      ? 'AI service quota exceeded. Please try again later.'
+      : (err.statusCode ? err.message : 'Internal server error');
     return {
-      statusCode: 500,
+      statusCode,
       headers: CORS_HEADERS,
-      body: JSON.stringify({ error: 'Internal server error' }),
+      body: JSON.stringify({ error: message }),
     };
   }
 };

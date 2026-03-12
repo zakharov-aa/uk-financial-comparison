@@ -19,9 +19,10 @@ export default function Recommendations() {
       const params = new URLSearchParams({ category, amount, situation });
       const res = await fetch(`${API_BASE}/recommendations?${params}`);
       const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Failed to get recommendation');
       setResult(data);
-    } catch {
-      setError('Failed to get recommendation. Please try again.');
+    } catch (err) {
+      setError(err.message || 'Failed to get recommendation. Please try again.');
     } finally {
       setLoading(false);
     }
