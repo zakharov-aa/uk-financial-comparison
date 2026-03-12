@@ -24,7 +24,7 @@ jobs:
         working-directory: backend
 
       - name: Install AWS SAM CLI
-        uses: aws-actions/setup-sam@v2.1.0
+        uses: aws-actions/setup-sam@v2
 
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v4.1.0
