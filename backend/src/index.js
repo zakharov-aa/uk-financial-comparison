@@ -1,6 +1,7 @@
 const { handleProducts } = require('./handlers/products');
 const { handleCompare } = require('./handlers/compare');
 const { handleRecommendations } = require('./handlers/recommendations');
+const { handleExtractFields } = require('./handlers/extractFields');
 
 const CORS_HEADERS = {
   'Access-Control-Allow-Origin': '*',
@@ -28,6 +29,8 @@ exports.handler = async (event) => {
       response = await handleCompare(body);
     } else if (method === 'GET' && path === '/recommendations') {
       response = await handleRecommendations(event.queryStringParameters || {});
+    } else if (method === 'GET' && path === '/extract-fields') {
+      response = await handleExtractFields(event.queryStringParameters || {});
     } else {
       return {
         statusCode: 404,

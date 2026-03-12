@@ -63,6 +63,16 @@ Resources:
           Properties:
             Path: /recommendations
             Method: OPTIONS
+        ExtractFieldsApi:
+          Type: Api
+          Properties:
+            Path: /extract-fields
+            Method: GET
+        OptionsExtractFields:
+          Type: Api
+          Properties:
+            Path: /extract-fields
+            Method: OPTIONS
 
   CacheBucket:
     Type: AWS::S3::Bucket
