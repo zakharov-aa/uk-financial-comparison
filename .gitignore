@@ -7,3 +7,4 @@ frontend/build/
 samconfig.toml
 coverage/
 *.log
+test-event.json

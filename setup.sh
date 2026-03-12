@@ -107,6 +107,15 @@ install_sam_cli() {
     return
   fi
 
+  # On Windows/Git Bash, sam.exe may be installed but not on the bash PATH
+  if [ "$OS" = "windows" ] && [ -f "/c/Program Files/Amazon/AWSSAMCLI/runtime/Scripts/sam.exe" ]; then
+    success "AWS SAM CLI already installed."
+    warn "SAM CLI is not on your Git Bash PATH. Use PowerShell or Windows Terminal to run sam commands:"
+    warn "  powershell.exe -Command \"sam build\""
+    warn "  powershell.exe -Command \"sam local start-api --env-vars env.json\""
+    return
+  fi
+
   info "Installing AWS SAM CLI..."
   case $OS in
     mac)
@@ -121,8 +130,10 @@ install_sam_cli() {
       ;;
     windows)
       if command -v winget &>/dev/null; then
-        winget install Amazon.SAM-CLI --silent
-        warn "SAM CLI installed. Restart your terminal, then re-run setup."
+        # winget exits 43 (no upgrade available) or 0 (installed) — both are success
+        winget install Amazon.SAM-CLI --silent || true
+        warn "SAM CLI installed. Open a new PowerShell/Windows Terminal window to use it."
+        warn "From Git Bash, prefix sam commands with: powershell.exe -Command \"sam ...\""
       else
         error "Please install SAM CLI manually: https://docs.aws.amazon.com/serverless-application-model/latest/developerguide/install-sam-cli.html"
       fi
