@@ -17,7 +17,9 @@ export default function Home() {
             <p style={{ color: '#666', margin: '0.75rem 0 1rem' }}>{cat.description}</p>
             <div style={{ display: 'flex', gap: '0.75rem' }}>
               <Link to={`/products/${cat.id}`}><button className="btn">View Rates</button></Link>
-              <Link to={`/recommendations?category=${cat.id}`}><button className="btn" style={{ background: '#27ae60' }}>Get Recommendation</button></Link>
+              {cat.id !== 'exchange-rates' && (
+                <Link to={`/recommendations?category=${cat.id}`}><button className="btn" style={{ background: '#27ae60' }}>Get Recommendation</button></Link>
+              )}
             </div>
           </div>
         ))}

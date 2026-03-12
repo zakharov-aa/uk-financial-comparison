@@ -19,8 +19,13 @@ jest.mock('../../src/services/boe', () => ({
 
 jest.mock('../../src/services/gemini', () => ({
   buildMortgagePrompt: jest.fn(),
-  buildSavingsPrompt: jest.fn(),
   getAIAnalysis: jest.fn(),
+}));
+
+jest.mock('../../src/services/exchangeRates', () => ({
+  fetchExchangeRates: jest.fn().mockResolvedValue({
+    base: 'GBP', rates: { USD: 1.27, EUR: 1.18, JPY: 190 },
+  }),
 }));
 
 const { handleRecommendations } = require('../../src/handlers/recommendations');
@@ -56,11 +61,11 @@ describe('handleRecommendations without AI (integration)', () => {
     expect(result.recommendation).toContain('2-year fixed');
   });
 
-  test('includes affordability analysis when annualIncome provided', async () => {
+  test('includes affordability analysis when incomeEntries provided', async () => {
     const result = await handleRecommendations({
       category: 'mortgages',
       amount: '200000',
-      annualIncome: '60000',
+      incomeEntries: JSON.stringify([{ amount: '60000', currency: 'GBP' }]),
       useAI: 'false',
     });
     // 200000 < 60000 * 4.5 = 270000 → within limits
@@ -71,7 +76,7 @@ describe('handleRecommendations without AI (integration)', () => {
     const result = await handleRecommendations({
       category: 'mortgages',
       amount: '500000',
-      annualIncome: '60000',
+      incomeEntries: JSON.stringify([{ amount: '60000', currency: 'GBP' }]),
       useAI: 'false',
     });
     // 500000 > 60000 * 4.5 = 270000 → exceeded

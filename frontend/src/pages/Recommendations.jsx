@@ -2,6 +2,8 @@ import { useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import API_BASE from '../config';
 
+const CURRENCIES = ['GBP', 'USD', 'EUR', 'JPY'];
+
 export default function Recommendations() {
   const [searchParams] = useSearchParams();
   const [category, setCategory] = useState(searchParams.get('category') || 'mortgages');
@@ -10,9 +12,10 @@ export default function Recommendations() {
   const [result, setResult] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
-  const [useAI, setUseAI] = useState(true);
-  const [annualIncome, setAnnualIncome] = useState('');
+  const [useAI, setUseAI] = useState(false);
+  const [incomeEntries, setIncomeEntries] = useState([{ amount: '', currency: 'GBP' }]);
   const [bankAmount, setBankAmount] = useState('');
+  const [bankAmountCurrency, setBankAmountCurrency] = useState('GBP');
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -20,9 +23,15 @@ export default function Recommendations() {
     setError(null);
     try {
       const params = new URLSearchParams({ category, amount, useAI: String(useAI) });
-      if (situation) params.set('situation', situation);
-      if (annualIncome !== '') params.set('annualIncome', annualIncome);
-      if (bankAmount !== '') params.set('bankAmount', bankAmount);
+      if (useAI && situation) params.set('situation', situation);
+      const filteredEntries = incomeEntries.filter(
+        e => e.amount !== '' && parseFloat(e.amount) !== 0
+      );
+      params.set('incomeEntries', JSON.stringify(filteredEntries));
+      if (bankAmount !== '' && parseFloat(bankAmount) !== 0) {
+        params.set('bankAmount', bankAmount);
+        params.set('bankAmountCurrency', bankAmountCurrency);
+      }
       const res = await fetch(`${API_BASE}/recommendations?${params}`);
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Failed to get recommendation');
@@ -34,15 +43,50 @@ export default function Recommendations() {
     }
   };
 
+  function updateEntry(index, field, value) {
+    const updated = [...incomeEntries];
+    updated[index] = { ...updated[index], [field]: value };
+    setIncomeEntries(updated);
+  }
+
+  function removeEntry(index) {
+    setIncomeEntries(incomeEntries.filter((_, i) => i !== index));
+  }
+
+  function addEntry() {
+    setIncomeEntries([...incomeEntries, { amount: '', currency: 'GBP' }]);
+  }
+
   return (
     <div>
-      <h2 style={{ marginBottom: '1.5rem' }}>Financial Recommendations</h2>
+      <h2 style={{ marginBottom: '1rem' }}>Financial Recommendations</h2>
+
+      {/* AI mode banner */}
+      <div
+        onClick={() => setUseAI(v => !v)}
+        style={{
+          cursor: 'pointer',
+          display: 'inline-flex',
+          alignItems: 'center',
+          gap: '0.5rem',
+          padding: '0.4rem 0.9rem',
+          borderRadius: '1rem',
+          marginBottom: '1.5rem',
+          backgroundColor: useAI ? '#d4edda' : '#e2e3e5',
+          color: useAI ? '#155724' : '#383d41',
+          border: `1px solid ${useAI ? '#c3e6cb' : '#d6d8db'}`,
+          userSelect: 'none',
+          fontSize: '0.9rem',
+        }}
+      >
+        {useAI ? '✓ Using AI (Gemini)' : 'Rule-based only'}
+      </div>
+
       <div className="card">
         <form onSubmit={handleSubmit}>
           <label>Product Category</label>
           <select value={category} onChange={e => setCategory(e.target.value)}>
             <option value="mortgages">Mortgages</option>
-            <option value="exchange-rates">Exchange Rates</option>
             <option value="savings">Savings</option>
           </select>
 
@@ -55,23 +99,57 @@ export default function Recommendations() {
             required
           />
 
-          <label>Annual Income After Taxes (£)</label>
-          <input
-            type="number"
-            min="0"
-            placeholder="e.g. 75000"
-            value={annualIncome}
-            onChange={e => setAnnualIncome(e.target.value)}
-          />
+          <label>Annual Income After Taxes</label>
+          {incomeEntries.map((entry, i) => (
+            <div key={i} style={{ display: 'flex', gap: '0.5rem', marginBottom: '0.5rem' }}>
+              <input
+                type="number"
+                min="0"
+                placeholder="e.g. 60000"
+                value={entry.amount}
+                onChange={e => updateEntry(i, 'amount', e.target.value)}
+                style={{ flex: 1, minWidth: '140px' }}
+              />
+              <select
+                value={entry.currency}
+                onChange={e => updateEntry(i, 'currency', e.target.value)}
+                style={{ width: '72px', flexShrink: 0 }}
+              >
+                {CURRENCIES.map(c => <option key={c} value={c}>{c}</option>)}
+              </select>
+              {incomeEntries.length > 1 && (
+                <button
+                  type="button"
+                  onClick={() => removeEntry(i)}
+                  style={{ padding: '0 0.5rem' }}
+                >×</button>
+              )}
+            </div>
+          ))}
+          <button
+            type="button"
+            onClick={addEntry}
+            style={{ marginBottom: '1rem', fontSize: '0.85rem' }}
+          >+ Add income source</button>
 
-          <label>Current Amount in the Bank (£)</label>
-          <input
-            type="number"
-            min="0"
-            placeholder="e.g. 50000"
-            value={bankAmount}
-            onChange={e => setBankAmount(e.target.value)}
-          />
+          <label>Current Amount in the Bank</label>
+          <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '1rem' }}>
+            <input
+              type="number"
+              min="0"
+              placeholder="e.g. 50000"
+              value={bankAmount}
+              onChange={e => setBankAmount(e.target.value)}
+              style={{ flex: 1, minWidth: '140px' }}
+            />
+            <select
+              value={bankAmountCurrency}
+              onChange={e => setBankAmountCurrency(e.target.value)}
+              style={{ width: '72px', flexShrink: 0 }}
+            >
+              {CURRENCIES.map(c => <option key={c} value={c}>{c}</option>)}
+            </select>
+          </div>
 
           {useAI && (
             <>
@@ -81,21 +159,11 @@ export default function Recommendations() {
                 placeholder="Describe your situation: income, existing debts, credit score, savings, employment type, how long you plan to stay in the property, etc."
                 value={situation}
                 onChange={e => setSituation(e.target.value)}
-                required
               />
             </>
           )}
 
-          <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginTop: '0.75rem' }}>
-            <input
-              type="checkbox"
-              checked={useAI}
-              onChange={e => setUseAI(e.target.checked)}
-            />
-            Use AI Recommendation
-          </label>
-
-          <button className="btn" type="submit" disabled={loading || !amount || (useAI && !situation)}>
+          <button className="btn" type="submit" disabled={loading || !amount}>
             {loading ? 'Getting recommendation...' : useAI ? 'Get AI Recommendation' : 'Get Recommendation'}
           </button>
         </form>
